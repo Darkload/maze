@@ -2,7 +2,8 @@
 import sys
 import random
 
-
+class INFINITY:
+	pass
 
 #nodes for a cell
 class MazeCell:	
@@ -14,6 +15,9 @@ class MazeCell:
 
 		self.explored = False
 		self.my_id = myd
+		self.path = False
+
+		self.distance = INFINITY
 
 
 	@property
@@ -57,7 +61,7 @@ class Maze:
 	width = 0
 	height = 0
 
-	def render(self):
+	def render(self, dist=False):
 
 		sys.stdout.write(' ')
 		for x in range(0,m.width):
@@ -69,16 +73,20 @@ class Maze:
 			sys.stdout.write('|')
 
 			for x in range(0,m.width):
-				m._render_cell(x,y)
+				m._render_cell(x,y,dist)
 
 
-	def _render_cell(self,x,y):
+	def _render_cell(self,x,y,dist=False):
 		cell = self.data[x][y]
 
-		if self.height-1 == y:
-			sys.stdout.write('_')
+		if dist:
+			sys.stdout.write(str(cell.distance))
+		elif cell.path:
+			sys.stdout.write('@')
 		elif not cell.explored:
-				sys.stdout.write('#')
+			sys.stdout.write('#')
+		elif self.height-1 == y:
+			sys.stdout.write('_')
 		elif not cell.down.is_wall:
 			sys.stdout.write(' ')
 		else:
@@ -111,10 +119,12 @@ class Maze:
 		self.data = maze
 		self.start = MazeCell(-1)
 		self.start.right = connection(self.start,self.data[0][0])
+		self.start.right.is_wall = False
 		self.start.explored = True
 
 		self.end = MazeCell(0)
 		self.end.left = connection(self.end,self.data[-1][-1])
+		self.end.left.is_wall = False
 
 		#build all associations
 		for x, column in enumerate(self.data):
@@ -200,6 +210,40 @@ class Maze:
 		return updated_unexplored, explored_cells
 
 
+	def bfs(self):
+
+		explored_cells = [self.start]
+		self.start.distance = 1
+
+		for cell in explored_cells:
+			for way in cell.neighbors:
+				if way and not way.is_wall:
+					neighbor = way.get_neighbor(cell)
+
+					if neighbor.distance is INFINITY:
+						neighbor.distance = cell.distance + 1
+						if neighbor not in explored_cells:
+							explored_cells.append(neighbor)
+
+					elif neighbor.distance < cell.distance + 1:
+						cell.distance = neighbor.distance + 1
+
+	def crawler(self):
+		current = self.end
+
+		while current:
+			best_way = None
+			best_value = current.distance
+			current.path = True
+			for way in current.neighbors:
+				if way and not way.is_wall:
+					neighbor = way.get_neighbor(current)
+					if neighbor.distance < best_value:
+						best_value = neighbor.distance
+						best_way = neighbor
+			current = best_way
+
+
 
 
 	def _build_func(self, start):
@@ -228,12 +272,17 @@ class Maze:
 
 
 
-m = Maze(25,25)
+m = Maze(55,48)
+#m = Maze(25,25)
 #m[1][1].left = 1
 
 
 m.render()
 m.buildMaze()
+m.render()
+m.bfs()
+m.render(dist=True)
+m.crawler()
 m.render()
 
 
