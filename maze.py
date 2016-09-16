@@ -15,7 +15,7 @@ class MazeCell:
 
 		self.explored = False
 		self.my_id = myd
-		self.path = False
+		self.is_path = False
 
 		self.distance = INFINITY
 
@@ -29,8 +29,22 @@ class MazeCell:
 		return str(self.my_id)
 
 	def __repr__(self):
-		#return str(self.my_id)
-		return self.render()
+		return str(self.my_id)
+		#return self.render()
+
+	#get a list of explored and unexplored neighbors
+	def get_explored_unexplored_neighbors(self):
+		unexplored_cells = []
+		explored_cells = []
+		for way in self.neighbors:
+			if way:
+				neighbor = way.get_neighbor(self)
+				if not neighbor.explored:
+					unexplored_cells.append(potential_path(neighbor,way))
+				elif neighbor not in explored_cells:
+					explored_cells.append(neighbor)
+
+		return explored_cells, unexplored_cells
 
 
 class connection:
@@ -47,13 +61,14 @@ class connection:
 			return self.nodes[0]
 
 class potential_path:
-	def __init__(self, cell, path):
+	def __init__(self, cell, connection):
 		self.cell = cell
-		self.path = path
+		self.connection = connection
 
 	def __repr__(self):
 		#return str(self.my_id)
 		return ""+str(self.cell.my_id)
+
 
 		
 class Maze:
@@ -81,7 +96,7 @@ class Maze:
 
 		if dist:
 			sys.stdout.write(str(cell.distance))
-		elif cell.path:
+		elif cell.is_path:
 			sys.stdout.write('@')
 		elif not cell.explored:
 			sys.stdout.write('#')
@@ -115,7 +130,7 @@ class Maze:
 
 			maze.append(column)
 
-
+		#set start and endpoints of the maze
 		self.data = maze
 		self.start = MazeCell(-1)
 		self.start.right = connection(self.start,self.data[0][0])
@@ -126,7 +141,7 @@ class Maze:
 		self.end.left = connection(self.end,self.data[-1][-1])
 		self.end.left.is_wall = False
 
-		#build all associations
+		#generate connections between nodes
 		for x, column in enumerate(self.data):
 			for y, cell in enumerate(column):
 				if x+1 < self.width:
@@ -142,42 +157,30 @@ class Maze:
 					cell.up = connection(cell,self.data[x][y-1])
 					self.data[x][y-1].down = cell.up
 
-		
-	def buildMaze(self):
-		'''
-		#next build associations
-		for x, column in enumerate(maze):
-			for y, cell in enumerate(column):
-				if x+1 < width:
-					cell.right = maze[x+1][y]
-				if x > 0 :
-					cell.left = maze[x-1][y]
-				if y+1 < height:
-					cell.down = maze[x][y+1]
-				if y < 0:
-					cell.up = maze[x][y-1]
-		'''
-		self._build_func(self.start)
 
-	'''
-	#recursive? will produce dfs, bad 
-	def _build_func(self,cell):
-		if cell == Border:
-			return
 
-		cell.explored = True
-
-		possibilities = []
-		for neerby in cell.borders:
-	'''
 
 
 	def _find_frontier(self):
-		# a bfs that finds the undiscovered frontier
+		# a modified bsf that finds the undiscovered frontier
 
 		explored_cells = [self.start]
+		explored_cells_hash = {self.start:1}
 		undiscovered = []
 		for cell in explored_cells:
+			#print explored_cells, undiscovered, cell
+
+			new_explored, new_unexplored = \
+			  cell.get_explored_unexplored_neighbors()
+
+			#print new_explored, new_unexplored
+			undiscovered += new_unexplored
+			for seen in new_explored:
+				if seen not in explored_cells_hash:
+					explored_cells += new_explored
+					explored_cells_hash[seen] = 1
+			#print len(explored_cells), len(undiscovered)
+			'''
 			for way in cell.neighbors:
 				if way:
 					neighbor = way.get_neighbor(cell)
@@ -188,26 +191,35 @@ class Maze:
 					elif neighbor not in explored_cells:
 						#print '1',neighbor
 						explored_cells.append(neighbor)
+			'''
 
 		return undiscovered, explored_cells
 
-	def _expand_frontier(self, undiscovered, explored_cells, last_explored):
+	#a modification to the find frontier function to greatly improve speed
+	# by a factor of N! over time
+	def _expand_frontier(self, undiscovered, last_explored):
 
 		updated_unexplored = []
 		for direction in undiscovered:
 			if direction.cell is not last_explored:
 				updated_unexplored.append(direction)
 
-		explored_cells.append(last_explored)
+		_, new_unexplored = \
+			  last_explored.get_explored_unexplored_neighbors()
+
+		#updated_unexplored = list_union(new_unexplored, updated_unexplored)
+		updated_unexplored += new_unexplored
+
+		'''
+		print len(updated_unexplored)
 		for way in last_explored.neighbors:
 			if way:
 				neighbor = way.get_neighbor(last_explored)
 				if not neighbor.explored:
 					updated_unexplored.append(potential_path(neighbor,way))
-				elif neighbor not in explored_cells:
-					explored_cells.append(neighbor)
+		'''
 
-		return updated_unexplored, explored_cells
+		return updated_unexplored
 
 
 	def bfs(self):
@@ -234,7 +246,7 @@ class Maze:
 		while current:
 			best_way = None
 			best_value = current.distance
-			current.path = True
+			current.is_path = True
 			for way in current.neighbors:
 				if way and not way.is_wall:
 					neighbor = way.get_neighbor(current)
@@ -244,9 +256,11 @@ class Maze:
 			current = best_way
 
 
+	def build_course(self):
 
+		self._build_course(self.start)
 
-	def _build_func(self, start):
+	def _build_course(self, start, show_progress=True):
 		
 
 		undiscovered, explored_cells = self._find_frontier()
@@ -254,37 +268,43 @@ class Maze:
 		count = 0
 		while undiscovered:
 			#print undiscovered
-			if len(undiscovered) == 1:
-				discovery = undiscovered[0]
-			else:
-				discovery = random.choice(undiscovered)
-			discovery.path.is_wall = False
+			#undiscovered_set = set(undiscovered)
+			#discovery = random.choice(tuple(undiscovered_set))
+			discovery = random.choice(undiscovered)
+			discovery.connection.is_wall = False
 			discovery.cell.explored = True
 			#print '!', discovery.
 			#raw_input('ok')
-			undiscovered, explored_cells = \
-			 self._expand_frontier(undiscovered, 
-			 	                 explored_cells,
-			 	                  discovery.cell)
+			#undiscovered, _ = self._find_frontier()
+			undiscovered = self._expand_frontier(undiscovered, discovery.cell)
+			#raw_input('go?')
 			count += 1
-			if count % 20 == 0:
+			#print count
+			if count % 50 == 0 and show_progress:
 				self.render()
+				#time.sleep(.05)
+		
 
 
-
+import time
 m = Maze(55,48)
 #m = Maze(25,25)
 #m[1][1].left = 1
 
 
 m.render()
-m.buildMaze()
+t1 = time.time()
+m.build_course()
+t2 = time.time()
+m.render()
+print t1-t2
+'''
 m.render()
 m.bfs()
 m.render(dist=True)
 m.crawler()
 m.render()
-
+'''
 
 
 
