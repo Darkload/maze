@@ -1,13 +1,29 @@
 
+'''
+A maze generator and solver
+
+The maze is generated using a tree graph that expands until it fills the given
+area, allowing for garenteed solves
+
+The maze is solved using dijkstras
+'''
+
+
 import sys
 import random
+import time
 
 class INFINITY:
 	pass
 
-#nodes for a cell
+
+'''
+	A single cell in the maze. They function as both a node in a tree as well
+	as a cell in the maze with an cordinate.
+'''
 class MazeCell:	
 	def __init__(self,myd):
+		#neighbors, used for navigation
 		self.left = None
 		self.right = None
 		self.up = None
@@ -15,25 +31,23 @@ class MazeCell:
 
 		self.explored = False
 		self.my_id = myd
+
+		#for dijkstra
+		self.distance = INFINITY
 		self.is_path = False
 
-		self.distance = INFINITY
-
-
+	#allows for easy iteration and concationation of neighbors
 	@property
 	def neighbors(self):
 		return [self.left, self.right, self.up, self.down]
-
 
 	def __str__(self):
 		return str(self.my_id)
 
 	def __repr__(self):
 		return str(self.my_id)
-		#return self.render()
 
-
-	#get a list of explored and unexplored neighbors
+	#get a list of explored and unexplored neighbors, may
 	def get_explored_unexplored_neighbors(self):
 		unexplored_cells = []
 		explored_cells = []
@@ -78,20 +92,18 @@ class Maze:
 	height = 0
 
 	def render(self, dist=False):
-
 		sys.stdout.write(' ')
 		for x in range(0,m.width):
 			sys.stdout.write('_ ')
 		sys.stdout.write('\n')
 
-
 		for y in range(0,m.height):
 			sys.stdout.write('|')
-
 			for x in range(0,m.width):
 				m._render_cell(x,y,dist)
 
-
+	#you cant have cells render themselves because they dont know
+	# where walls or boundaries are
 	def _render_cell(self,x,y,dist=False):
 		cell = self.data[x][y]
 
@@ -116,6 +128,11 @@ class Maze:
 		else:
 			sys.stdout.write('|')
 
+	'''
+		Builds up the maze base.
+		This creates all the cells, endpoints, and sets the 
+		neighbors and connections for all the cells
+	'''
 	def __init__(self, width, height):
 
 		#first define the maze
@@ -134,11 +151,13 @@ class Maze:
 		#set start and endpoints of the maze
 		self.data = maze
 		self.start = MazeCell(-1)
+		#self.start.right = connection(self.start,self.data[0][int(height/2)])
 		self.start.right = connection(self.start,self.data[0][0])
 		self.start.right.is_wall = False
 		self.start.explored = True
 
 		self.end = MazeCell(0)
+		#self.end.left = connection(self.end,self.data[-1][int(height/2)])
 		self.end.left = connection(self.end,self.data[-1][-1])
 		self.end.left.is_wall = False
 
@@ -158,10 +177,10 @@ class Maze:
 					cell.up = connection(cell,self.data[x][y-1])
 					self.data[x][y-1].down = cell.up
 
-
-
-
-
+	'''
+		A graph search that expands outward from the start to find all the
+		unexplored leafs
+	'''
 	def _find_frontier(self):
 		# a modified bsf that finds the undiscovered frontier
 
@@ -180,26 +199,18 @@ class Maze:
 				if seen not in explored_cells_hash:
 					explored_cells_list += new_explored
 					explored_cells_hash[seen] = 1
-			#print len(explored_cells), len(undiscovered)
-			'''
-			for way in cell.neighbors:
-				if way:
-					neighbor = way.get_neighbor(cell)
-					#print name, way
-					if not neighbor.explored:
-						#print '2', neighbor, way
-						undiscovered.append(potential_path(neighbor,way))
-					elif neighbor not in explored_cells:
-						#print '1',neighbor
-						explored_cells.append(neighbor)
-			'''
 
 		return undiscovered, explored_cells_list
 
-	#a modification to the find frontier function to greatly improve speed
-	# by a factor of N! over time
-	def _expand_frontier(self, undiscovered, last_explored):
+	'''
+		After each expansion of the maze, we are left with a list of previous
+		cells that the maze could have expanded to and the a newly explored
+		location. By expanding the list of unexplored places (frontier) with
+		the last explored place, we dont have to re traverse the graph to find
+		the next list of choices, allowing for a nice preformance boost
 
+	'''
+	def _expand_frontier(self, undiscovered, last_explored):
 		updated_unexplored = []
 		for direction in undiscovered:
 			if direction.cell is not last_explored:
@@ -208,26 +219,21 @@ class Maze:
 		_, new_unexplored = \
 			  last_explored.get_explored_unexplored_neighbors()
 
-		#updated_unexplored = list_union(new_unexplored, updated_unexplored)
 		updated_unexplored += new_unexplored
-
-		'''
-		print len(updated_unexplored)
-		for way in last_explored.neighbors:
-			if way:
-				neighbor = way.get_neighbor(last_explored)
-				if not neighbor.explored:
-					updated_unexplored.append(potential_path(neighbor,way))
-		'''
 
 		return updated_unexplored
 
+	#solves a maze. This assumes it is properly built.
+	def solve_maze(self):
+		self.dijkstra()
+		self.crawler()
 
-	def bfs(self):
+    #Markes cell of a maze using dijkstras
+	def dijkstra(self):
 
 		#the hash will allow for a huge (~2000x) speed reduction
-		# but it relys on the ids. Safer to use something less
-		# dev alterable ie time stamp or pythons internal object id?
+		# but it relies on the ids. Safer to use something less
+		# dev alterable (time stamp or pythons internal object id?)
 		explored_cells_list = [self.start]
 		explored_cells_hash = {}
 		explored_cells_hash[self.start.my_id] = 1
@@ -247,6 +253,8 @@ class Maze:
 					elif neighbor.distance < cell.distance + 1:
 						cell.distance = neighbor.distance + 1
 
+	#Crawls through the maze marked with dijkstra, and finds the shortest path
+	#  it just gives if it cant find anything to avoid errors
 	def crawler(self):
 		current = self.end
 
@@ -262,62 +270,72 @@ class Maze:
 						best_way = neighbor
 			current = best_way
 
-
-	def build_course(self):
-
-		self._build_course(self.start)
-
-	def _build_course(self, start, show_progress=True):
-		
-
+	'''
+	The maze starts off as a bunch of unexplored cells. To connect the cells
+      The list of unexplored cells surrounding explored cells is found 
+      ie the 'frontier', and a random cell is choosen to be explored.
+	'''
+	def build_course(self, show_progress=True):
+		start = self.start #the pre explored start
 		undiscovered, explored_cells = self._find_frontier()
 
 		count = 0
 		while undiscovered:
-			#print undiscovered
-			#undiscovered_set = set(undiscovered)
-			#discovery = random.choice(tuple(undiscovered_set))
 			discovery = random.choice(undiscovered)
 			discovery.connection.is_wall = False
 			discovery.cell.explored = True
-			#print '!', discovery.
-			#raw_input('ok')
-			#undiscovered, _ = self._find_frontier()
+
 			undiscovered = self._expand_frontier(undiscovered, discovery.cell)
-			#raw_input('go?')
+			
+			#just for rendering
 			count += 1
-			#print count
 			if count % 30 == 0 and show_progress:
 				self.render()
-				#time.sleep(.05)
 		
 
 
-import time
-m = Maze(55,48)
-#m = Maze(25,25)
-#m[1][1].left = 1
+
+try:
+	print 'Hi! This program will build and solve a maze!'
+	height = int(raw_input('How tall should the maze be? (#)  '))
+	width = int(raw_input('How wide should the maze be? (#)  '))
+
+except ValueError:
+	print "Sorry, I couln't read those numbers, using defaults"
+	height = 40
+	width = 55
+
+render_mazes = False
+show = raw_input('Should I render the process? (y/n) ')
+if show == 'y':
+	render_mazes = True
+elif show == 'n':
+	render_mazes = False
+else:
+	print "I couldnt understand you, using default"
+	render_mazes = False
 
 
+
+m = Maze(width,height)
+
+t1 = time.time()
+m.build_course(show_progress = render_mazes)
+t2 = time.time()
+build_time = t2-t1
+
+print '\n\nFinished maze:'
 m.render()
 t1 = time.time()
-m.build_course()
+m.solve_maze()
 t2 = time.time()
+solver_time = t2-t1
+print '\n\nSolved maze:'
 m.render()
-print t1-t2
 
-
-m.render()
-t1 = time.time()
-m.bfs()
-t2 = time.time()
-print t1-t2, '2'
-#m.render(dist=True)
-t1 = time.time()
-m.crawler()
-t2 = time.time()
-print t1-t2, '3'
-m.render()
+print "Time to build maze: ", build_time 
+print "Time to solve maze: ", solver_time 
+print 'Bye!'
 
 
 
