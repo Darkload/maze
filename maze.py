@@ -280,9 +280,9 @@ class Maze:
 			#raw_input('go?')
 			count += 1
 			#print count
-			if count % 50 == 0 and show_progress:
+			if count % 30 == 0 and show_progress:
 				self.render()
-				#time.sleep(.05)
+				time.sleep(.05)
 		
 
 
@@ -298,14 +298,12 @@ m.build_course()
 t2 = time.time()
 m.render()
 print t1-t2
-'''
+
 m.render()
 m.bfs()
 m.render(dist=True)
 m.crawler()
 m.render()
-'''
-
 
 
 
