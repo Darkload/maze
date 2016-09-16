@@ -32,6 +32,7 @@ class MazeCell:
 		return str(self.my_id)
 		#return self.render()
 
+
 	#get a list of explored and unexplored neighbors
 	def get_explored_unexplored_neighbors(self):
 		unexplored_cells = []
@@ -164,10 +165,10 @@ class Maze:
 	def _find_frontier(self):
 		# a modified bsf that finds the undiscovered frontier
 
-		explored_cells = [self.start]
+		explored_cells_list = [self.start]
 		explored_cells_hash = {self.start:1}
 		undiscovered = []
-		for cell in explored_cells:
+		for cell in explored_cells_list:
 			#print explored_cells, undiscovered, cell
 
 			new_explored, new_unexplored = \
@@ -177,7 +178,7 @@ class Maze:
 			undiscovered += new_unexplored
 			for seen in new_explored:
 				if seen not in explored_cells_hash:
-					explored_cells += new_explored
+					explored_cells_list += new_explored
 					explored_cells_hash[seen] = 1
 			#print len(explored_cells), len(undiscovered)
 			'''
@@ -193,7 +194,7 @@ class Maze:
 						explored_cells.append(neighbor)
 			'''
 
-		return undiscovered, explored_cells
+		return undiscovered, explored_cells_list
 
 	#a modification to the find frontier function to greatly improve speed
 	# by a factor of N! over time
@@ -224,18 +225,24 @@ class Maze:
 
 	def bfs(self):
 
-		explored_cells = [self.start]
+		#the hash will allow for a huge (~2000x) speed reduction
+		# but it relys on the ids. Safer to use something less
+		# dev alterable ie time stamp or pythons internal object id?
+		explored_cells_list = [self.start]
+		explored_cells_hash = {}
+		explored_cells_hash[self.start.my_id] = 1
 		self.start.distance = 1
 
-		for cell in explored_cells:
+		for cell in explored_cells_list:
 			for way in cell.neighbors:
 				if way and not way.is_wall:
 					neighbor = way.get_neighbor(cell)
 
 					if neighbor.distance is INFINITY:
 						neighbor.distance = cell.distance + 1
-						if neighbor not in explored_cells:
-							explored_cells.append(neighbor)
+						if neighbor.my_id not in explored_cells_hash:
+							explored_cells_list.append(neighbor)
+							explored_cells_hash[neighbor.my_id] = 1
 
 					elif neighbor.distance < cell.distance + 1:
 						cell.distance = neighbor.distance + 1
@@ -282,7 +289,7 @@ class Maze:
 			#print count
 			if count % 30 == 0 and show_progress:
 				self.render()
-				time.sleep(.05)
+				#time.sleep(.05)
 		
 
 
@@ -299,10 +306,17 @@ t2 = time.time()
 m.render()
 print t1-t2
 
+
 m.render()
+t1 = time.time()
 m.bfs()
-m.render(dist=True)
+t2 = time.time()
+print t1-t2, '2'
+#m.render(dist=True)
+t1 = time.time()
 m.crawler()
+t2 = time.time()
+print t1-t2, '3'
 m.render()
 
 
