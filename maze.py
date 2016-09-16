@@ -3,7 +3,7 @@
 A maze generator and solver
 
 The maze is generated using a tree graph that expands until it fills the given
-area, allowing for garenteed solves
+area, allowing for guaranteed solves
 
 The maze is solved using dijkstras
 '''
@@ -16,10 +16,9 @@ import time
 class INFINITY:
 	pass
 
-
 '''
-	A single cell in the maze. They function as both a node in a tree as well
-	as a cell in the maze with an cordinate.
+A single cell in the maze. They function as both a node in a tree as well
+as a cell in the maze with an cordinate.
 '''
 class MazeCell:	
 	def __init__(self,myd):
@@ -47,21 +46,25 @@ class MazeCell:
 	def __repr__(self):
 		return str(self.my_id)
 
-	#get a list of explored and unexplored neighbors, may
-	def get_explored_unexplored_neighbors(self):
-		unexplored_cells = []
-		explored_cells = []
+	#get a list of explored and unexplored neighbors
+	def _get_explored_unexplored_neighbors(self, get_explored=True):
+		cells = []
 		for way in self.neighbors:
 			if way:
 				neighbor = way.get_neighbor(self)
-				if not neighbor.explored:
-					unexplored_cells.append(potential_path(neighbor,way))
-				elif neighbor not in explored_cells:
-					explored_cells.append(neighbor)
+				if not neighbor.explored and get_explored is False:
+					cells.append(potential_path(neighbor,way))
+				elif neighbor.explored and get_explored is True:
+					cells.append(neighbor)
+		return cells
 
-		return explored_cells, unexplored_cells
+	def get_explored_neighbors(self):
+		return self._get_explored_unexplored_neighbors(get_explored=True)
 
+	def get_unexplored_neighbors(self):
+		return self._get_explored_unexplored_neighbors(get_explored=False)
 
+#A connection between maze cells. allows for walls between neighbors
 class connection:
 	def __init__(self, a, b):
 		self.is_wall = True
@@ -75,61 +78,72 @@ class connection:
 		else:
 			return self.nodes[0]
 
+#A wrapper around a path and a direction, so a newly explored
+#  node knows where it came from
 class potential_path:
 	def __init__(self, cell, connection):
 		self.cell = cell
 		self.connection = connection
 
 	def __repr__(self):
-		#return str(self.my_id)
 		return ""+str(self.cell.my_id)
-
-
 		
+
+'''
+The maze object is a rectangular container of maze cells. The maze is in
+charge of creating the cells, and the connections between them. It also
+allows for the creation of a solvable maze and has a function to solve the maze
+It can render itself as well
+'''
 class Maze:
 	data = []
 	width = 0
 	height = 0
 
 	def render(self, dist=False):
-		sys.stdout.write(' ')
-		for x in range(0,m.width):
-			sys.stdout.write('_ ')
-		sys.stdout.write('\n')
+		output = ''
+		output += ' '
+		for x in range(0,self.width):
+			output += '_ '
+		output += '\n'
 
-		for y in range(0,m.height):
-			sys.stdout.write('|')
-			for x in range(0,m.width):
-				m._render_cell(x,y,dist)
+		for y in range(0,self.height):
+			output += '|'
+			for x in range(0,self.width):
+				output += self._render_cell(x,y,dist)
+		return output
 
 	#you cant have cells render themselves because they dont know
 	# where walls or boundaries are
 	def _render_cell(self,x,y,dist=False):
 		cell = self.data[x][y]
+		output = ''
 
 		if dist:
-			sys.stdout.write(str(cell.distance))
+			output += str(cell.distance)
 		elif cell.is_path:
-			sys.stdout.write('@')
+			output += '@'
 		elif not cell.explored:
-			sys.stdout.write('#')
+			output += '#'
 		elif self.height-1 == y:
-			sys.stdout.write('_')
+			output += '_'
 		elif not cell.down.is_wall:
-			sys.stdout.write(' ')
+			output += ' '
 		else:
-			sys.stdout.write('_')
+			output += '_'
 
 		if self.width-1 == x:
-			sys.stdout.write('|')
-			sys.stdout.write('\n')
+			output += '|'
+			output += '\n'
 		elif not cell.right.is_wall:
-			sys.stdout.write(' ')
+			output += ' '
 		else:
-			sys.stdout.write('|')
+			output += '|'
+
+		return output
 
 	'''
-		Builds up the maze base.
+	  Builds up the maze base.
 		This creates all the cells, endpoints, and sets the 
 		neighbors and connections for all the cells
 	'''
@@ -178,22 +192,18 @@ class Maze:
 					self.data[x][y-1].down = cell.up
 
 	'''
-		A graph search that expands outward from the start to find all the
+	  A graph search that expands outward from the start to find all the
 		unexplored leafs
 	'''
 	def _find_frontier(self):
-		# a modified bsf that finds the undiscovered frontier
-
 		explored_cells_list = [self.start]
 		explored_cells_hash = {self.start:1}
 		undiscovered = []
 		for cell in explored_cells_list:
-			#print explored_cells, undiscovered, cell
 
-			new_explored, new_unexplored = \
-			  cell.get_explored_unexplored_neighbors()
+			new_explored = cell.get_explored_neighbors()
+			new_unexplored = cell.get_unexplored_neighbors()
 
-			#print new_explored, new_unexplored
 			undiscovered += new_unexplored
 			for seen in new_explored:
 				if seen not in explored_cells_hash:
@@ -203,7 +213,7 @@ class Maze:
 		return undiscovered, explored_cells_list
 
 	'''
-		After each expansion of the maze, we are left with a list of previous
+	  After each expansion of the maze, we are left with a list of previous
 		cells that the maze could have expanded to and the a newly explored
 		location. By expanding the list of unexplored places (frontier) with
 		the last explored place, we dont have to re traverse the graph to find
@@ -216,8 +226,7 @@ class Maze:
 			if direction.cell is not last_explored:
 				updated_unexplored.append(direction)
 
-		_, new_unexplored = \
-			  last_explored.get_explored_unexplored_neighbors()
+		new_unexplored = last_explored.get_unexplored_neighbors()
 
 		updated_unexplored += new_unexplored
 
@@ -290,8 +299,10 @@ class Maze:
 			#just for rendering
 			count += 1
 			if count % 30 == 0 and show_progress:
-				self.render()
+				print self.render()
 		
+	def __repr__(self):
+		return self.render()
 
 
 
@@ -313,25 +324,25 @@ elif show == 'n':
 	render_mazes = False
 else:
 	print "I couldnt understand you, using default"
-	render_mazes = False
+	render_mazes = True
 
 
-
-m = Maze(width,height)
+amazing = Maze(width,height)
 
 t1 = time.time()
-m.build_course(show_progress = render_mazes)
+amazing.build_course(show_progress = render_mazes)
 t2 = time.time()
 build_time = t2-t1
 
 print '\n\nFinished maze:'
-m.render()
+print amazing
 t1 = time.time()
-m.solve_maze()
+amazing.solve_maze()
 t2 = time.time()
 solver_time = t2-t1
 print '\n\nSolved maze:'
-m.render()
+print '(The start is at the top left and the end at the bottom right)'
+print amazing
 
 print "Time to build maze: ", build_time 
 print "Time to solve maze: ", solver_time 
